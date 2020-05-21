@@ -15,7 +15,7 @@ import custom_models
 ### PARAMS ###
 #Just stuff you might want to quickly change
 
-output_name = 'customsmall_letter_noaug'   # base name for various outputs, like the print log and the saved model
+output_name = 'customsmall_letter_aug'   # base name for various outputs, like the print log and the saved model
 use_cuda = True   #use GPU acceleration
 
 
@@ -24,16 +24,19 @@ epochs = 50
 torch.manual_seed(2)
 batch_size = 100 # size of training minibatches
 test_batch_size = 200 # size of test minibatches
-save_model_interval = 5 #Save model every X epochs
+save_model = True    # Should the model be saved?
+save_model_interval = 100 #Save model every X epochs
 num_classes = 26        # number of classes in dataset, 26 for letters in alphabet   
 
 #model
 #model = models.alexnet(pretrained=False) #load a model from the models.py script, or switch this to torch.load(path_to_model) to load a model from a .pt file   
 #num_ftrs = model.classifier[6].in_features
 #model.classifier[6] = nn.Linear(num_ftrs,num_classes)
-model = custom_models.CustomNet_small()
 
-optimizer = optim.Adam(model.parameters(), lr=.005)  # adam optimizer
+model = torch.load('../models/customsmall_letter_aug_acc0.944.pt')
+#model = custom_models.CustomNet_small()
+
+optimizer = optim.Adam(model.parameters(), lr=.001)  # adam optimizer
 
 label_names = data_classes.letter_labels
 
@@ -90,8 +93,8 @@ def test(model, device, test_loader, criterion, epoch, max_acc):
 		test_loss, correct, len(test_loader.dataset),
 		100. * total_acc),print_log)
 
-	if (epoch-1)%save_model_interval == 0 or (total_acc > max_acc and total_acc > .9):       #condition to save model
-		print('saving model')
+	if ((epoch-1)%save_model_interval == 0 or (total_acc > max_acc and total_acc > .94)) and save_model == True:       #condition to save model
+		print('SAVING MODEL')
 		torch.save(model,'../models/%s_acc%s.pt'%(output_name,str(round(total_acc,3))))
 
 	if total_acc > max_acc:
@@ -119,7 +122,7 @@ def print_out(text,log):
 
 if __name__ == '__main__':
 
-	print_log = open('../training_logs/'+output_name+'_log.txt','w+') #file logs everything that prints to console
+	print_log = open('../training_logs/'+output_name+'_log.txt','a+') #file logs everything that prints to console
 
 	#Using GPU
 	use_cuda = use_cuda and torch.cuda.is_available()

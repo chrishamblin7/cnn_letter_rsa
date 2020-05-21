@@ -60,7 +60,7 @@ class letters_validation_data(Dataset):
 class letters_train_data(Dataset):
 	
 
-	def __init__(self, root_dir ='/home/chris/projects/dan_letter/data/', train=True, transform = default_transform, rgb_convert=True, size_vary=False):
+	def __init__(self, root_dir ='/home/chris/projects/dan_letter/data/', train=True, transform = default_transform, rgb_convert=True, size_vary=True):
 				
 		if train:
 			self.root_dir = root_dir+'train'
@@ -89,7 +89,7 @@ class letters_train_data(Dataset):
 		return torch.tensor(self.label_names.index(label_name))       
 
 	def shrink_add_border(self,img,min_size=100):
-		old_size = np.array(img).shape[0]
+		old_size = img.size[0]
 		new_size = randint(min_size/2,old_size/2)*2
 		img = img.resize((new_size,new_size), Image.ANTIALIAS)
 		img = ImageOps.expand(img,border=int((old_size-new_size)/2),fill='white')
@@ -103,7 +103,7 @@ class letters_train_data(Dataset):
 		if self.rgb_convert:
 			img = img.convert('RGB')
 		if self.size_vary:
-			img = self.shrink_add_border(self,img)
+			img = self.shrink_add_border(img)
 		img = self.transform(img)
 		label = self.get_label_from_name(self.img_names[idx])
 		

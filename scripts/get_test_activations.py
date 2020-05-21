@@ -11,7 +11,7 @@ import pickle
 SUM = True  #sum output activation maps
 FLIP = True #flip output so its featuresXimages not imagesXfeatures
 output_type = 'mat'
-output_name = 'customsmall_letter_noaug_acc0.973'
+output_name = 'alexnet_letter_aug_acc0.982'
 
 ####END OF PARAMS ########
 
