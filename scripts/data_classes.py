@@ -19,7 +19,7 @@ default_transform = transforms.Compose([
 class letters_validation_data(Dataset):
 	
 
-	def __init__(self, root_dir ='/home/chris/projects/dan_letter/data/validation/', order_file_name = '/home/chris/projects/dan_letter/data/validation_image_order.txt', transform = default_transform, rgb_convert=True):
+	def __init__(self, root_dir ='../data/validation/', order_file_name = '../data/validation_image_order.txt', transform = default_transform, rgb_convert=True):
 		
 		
 		self.root_dir = root_dir
@@ -60,7 +60,7 @@ class letters_validation_data(Dataset):
 class letters_train_data(Dataset):
 	
 
-	def __init__(self, root_dir ='/home/chris/projects/dan_letter/data/', train=True, transform = default_transform, rgb_convert=True, size_vary=True):
+	def __init__(self, root_dir ='../data/', train=True, transform = default_transform, rgb_convert=True, size_vary=True):
 				
 		if train:
 			self.root_dir = root_dir+'train'

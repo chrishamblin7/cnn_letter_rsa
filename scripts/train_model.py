@@ -15,13 +15,14 @@ import custom_models
 ### PARAMS ###
 #Just stuff you might want to quickly change
 
-output_name = 'customsmall_letter_aug'   # base name for various outputs, like the print log and the saved model
+output_name = 'alexnet_letter_aug_seed9'   # base name for various outputs, like the print log and the saved model
 use_cuda = True   #use GPU acceleration
 
 
 criterion = nn.CrossEntropyLoss()
 epochs = 50
-torch.manual_seed(2)
+torch.manual_seed(9)
+acc_thresh = .95
 batch_size = 100 # size of training minibatches
 test_batch_size = 200 # size of test minibatches
 save_model = True    # Should the model be saved?
@@ -29,14 +30,14 @@ save_model_interval = 100 #Save model every X epochs
 num_classes = 26        # number of classes in dataset, 26 for letters in alphabet   
 
 #model
-#model = models.alexnet(pretrained=False) #load a model from the models.py script, or switch this to torch.load(path_to_model) to load a model from a .pt file   
-#num_ftrs = model.classifier[6].in_features
-#model.classifier[6] = nn.Linear(num_ftrs,num_classes)
+model = models.alexnet(pretrained=False) #load a model from the models.py script, or switch this to torch.load(path_to_model) to load a model from a .pt file   
+num_ftrs = model.classifier[6].in_features
+model.classifier[6] = nn.Linear(num_ftrs,num_classes)
 
-model = torch.load('../models/customsmall_letter_aug_acc0.944.pt')
+#model = torch.load('../models/customsmall_letter_aug_acc0.944.pt')
 #model = custom_models.CustomNet_small()
 
-optimizer = optim.Adam(model.parameters(), lr=.001)  # adam optimizer
+optimizer = optim.Adam(model.parameters(), lr=.0005)  # adam optimizer
 
 label_names = data_classes.letter_labels
 
@@ -89,11 +90,11 @@ def test(model, device, test_loader, criterion, epoch, max_acc):
 	test_loss /= len(test_loader.dataset)
 	total_acc = correct / len(test_loader.dataset)
 	print_out('epoch: ' + str(epoch),print_log)
-	print_out('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+	print_out('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n'.format(
 		test_loss, correct, len(test_loader.dataset),
 		100. * total_acc),print_log)
 
-	if ((epoch-1)%save_model_interval == 0 or (total_acc > max_acc and total_acc > .94)) and save_model == True:       #condition to save model
+	if ((epoch-1)%save_model_interval == 0 or (total_acc > max_acc and total_acc > acc_thresh)) and save_model == True:       #condition to save model
 		print('SAVING MODEL')
 		torch.save(model,'../models/%s_acc%s.pt'%(output_name,str(round(total_acc,3))))
 
