@@ -1,0 +1,28 @@
+OPTIMIZERAdam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    eps: 1e-08
+    lr: 0.005
+    weight_decay: 0
+)MODELCustomNet_small(
+  (features): Sequential(
+    (0): Conv2d(3, 40, kernel_size=(5, 5), stride=(2, 2), padding=(3, 3), bias=False)
+    (1): ReLU(inplace=True)
+    (2): MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
+    (3): Conv2d(40, 20, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+    (4): ReLU(inplace=True)
+    (5): Conv2d(20, 60, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+    (6): ReLU(inplace=True)
+  )
+  (avgpool): AdaptiveAvgPool2d(output_size=(4, 4))
+  (classifier): Sequential(
+    (0): Dropout(p=0.5, inplace=False)
+    (1): Linear(in_features=960, out_features=500, bias=True)
+    (2): ReLU(inplace=True)
+    (3): Dropout(p=0.5, inplace=False)
+    (4): Linear(in_features=500, out_features=200, bias=True)
+    (5): ReLU(inplace=True)
+    (6): Linear(in_features=200, out_features=26, bias=True)
+  )
+)Train Epoch: 1 [0/11440 (0%)]	Loss: 3.253453Train Epoch: 1 [500/11440 (4%)]	Loss: 3.274586Train Epoch: 1 [1000/11440 (9%)]	Loss: 3.248840
