@@ -14,36 +14,36 @@ import random
 #torchvision compose transforms
 
 imnet_normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     	 std=[0.229, 0.224, 0.225])
+									 	 std=[0.229, 0.224, 0.225])
 
 default_transform = transforms.Compose([
-        			transforms.Resize((224,224)),
-        			transforms.ToTensor()])
+					transforms.Resize((224,224)),
+					transforms.ToTensor()])
 
 
 mixed_letter_transform = transforms.Compose([
-        			transforms.Resize((224,224)),
-        			transforms.ToTensor(),
+					transforms.Resize((224,224)),
+					transforms.ToTensor(),
 					imnet_normalize
 					])
 
 imagenet_train_transform = transforms.Compose([
-            	transforms.RandomResizedCrop(224),
-            	transforms.RandomHorizontalFlip(),
-            	transforms.ToTensor(),
-            	imnet_normalize
-        		])
+				transforms.RandomResizedCrop(224),
+				transforms.RandomHorizontalFlip(),
+				transforms.ToTensor(),
+				imnet_normalize
+				])
 
 imagenet_test_transform = transforms.Compose([
-                	transforms.Resize(256),
-            		transforms.CenterCrop(224),
-            		transforms.ToTensor(),
+					transforms.Resize(256),
+					transforms.CenterCrop(224),
+					transforms.ToTensor(),
 					imnet_normalize
-        			])
+					])
 
 lenet_transform = transforms.Compose([
-        			transforms.Resize((32,32)),
-        			transforms.ToTensor(),
+					transforms.Resize((32,32)),
+					transforms.ToTensor(),
 					imnet_normalize
 					])
 
@@ -69,27 +69,95 @@ totensor = transforms.ToTensor()
 
 
 def add_img_ratio_margin(pil_img, color='white',ratio=.7):
-    width, height = pil_img.size
-    margin = int(ratio*(width+height)/2)
-    #print('width')
-    #print(width)
-    #print('height')
-    #print(height)
-    #print('margin')
-    #print(margin)
-    
-    if width>height:
-        new_width = width + 2*margin 
-        new_height = height + 2*margin + (width-height)
-    else:
-        new_width = width + 2*margin + (height-width) 
-        new_height = height + 2*margin
+	width, height = pil_img.size
+	margin = int(ratio*(width+height)/2)
+	#print('width')
+	#print(width)
+	#print('height')
+	#print(height)
+	#print('margin')
+	#print(margin)
+	
+	if width>height:
+		new_width = width + 2*margin 
+		new_height = height + 2*margin + (width-height)
+	else:
+		new_width = width + 2*margin + (height-width) 
+		new_height = height + 2*margin
 
-    result = Image.new(pil_img.mode, (new_width, new_height), color)
-    result.paste(pil_img, (int(new_width/2-width/2), int(new_height/2-height/2)))
-    return result
+	result = Image.new(pil_img.mode, (new_width, new_height), color)
+	result.paste(pil_img, (int(new_width/2-width/2), int(new_height/2-height/2)))
+	return result
 
 
+def letter_tight_crop(img_data,background=1):
+
+	if len(img_data.shape) == 3:
+		img_data = img_data[0]
+
+	non_background_mask = img_data != background
+
+	mask_max_values_w, mask_max_indices_w = torch.max(non_background_mask, dim=1)
+	mask_max_values_h, mask_max_indices_h = torch.max(non_background_mask, dim=0)
+	w_hit_indices = (mask_max_values_w == True).nonzero(as_tuple=True)[0]
+	h_hit_indices = (mask_max_values_h == True).nonzero(as_tuple=True)[0]
+
+	#get crop indices
+	w_start = int(w_hit_indices[0])
+	w_end = int(w_hit_indices[-1])
+	h_start = int(h_hit_indices[0])
+	h_end = int(h_hit_indices[-1])
+
+
+	#padd narrower dim to make square aspect ratio
+	diff = (w_end - w_start) - (h_end - h_start)
+
+
+	if diff != 0:
+		pad1 = int(diff/2)
+		pad2 = int(diff/2)
+		if diff%2 == 1:
+			if (diff == 1) or (diff == -1):
+				pad2=diff
+			else:
+				pad2 = pad2+int(pad2/abs(pad2))
+
+		if pad2 > 0:
+			h_end = h_end+pad2
+			h_start = h_start-pad1
+		else:
+			w_end = w_end-pad2
+			w_start = w_start+pad1
+
+		
+		
+	#add some extra padding if padding exceeds orig image size
+
+	if w_end > img_data.shape[0]:
+		extra_pad = background*torch.ones(w_end - img_data.shape[0],img_data.shape[1])
+		img_data = torch.cat((img_data, extra_pad), 0)
+	if h_end > img_data.shape[1]:
+		extra_pad = background*torch.ones(img_data.shape[0],h_end - img_data.shape[1])
+		img_data = torch.cat((img_data, extra_pad), 1)
+	if w_start < 0:
+		extra_pad = background*torch.ones(-1*w_start,img_data.shape[1])
+		img_data = torch.cat((extra_pad,img_data), 0)
+		w_end -= w_start
+		w_start = 0
+	if h_start < 0:
+		extra_pad = background*torch.ones(img_data.shape[0],-1*h_start)
+		img_data = torch.cat((extra_pad,img_data), 1)
+		h_end -= h_start
+		h_start = 0
+
+
+	
+	#crop image
+	cropped_img_data = img_data[w_start:w_end,h_start:h_end]
+	
+	#if cropped_img_data.shape[0] != cropped_img_data.shape[1]:
+	
+	return cropped_img_data
 
 
 
@@ -251,16 +319,10 @@ class mix_imagenet_letter_data(Dataset):
 
 class augmentation_letters_data(Dataset):
 	
-	def __init__(self, root_dir ='../data/combined_data/', train=True,use_augment=True, imagenet_normalize=True,return_augmentations = False, transform_prob_dict=None):
+	def __init__(self, root_dir ='../data/combined_data/train_uncropped/',use_augment=True, imagenet_normalize=True,return_augmentations = False, cropped=False, transform_prob_dict=None):
 				
-		if train:
-			self.root_dir = root_dir+'/train'
-		elif 'expstim' not in root_dir:
-			self.root_dir = root_dir+'/test'
-		else:
-			self.root_dir = root_dir
+		self.root_dir = root_dir
 		
-
 		self.img_names = os.listdir(self.root_dir)
 		self.img_names.sort()
 
@@ -272,7 +334,8 @@ class augmentation_letters_data(Dataset):
 
 		self.num_classes = len(self.label_names)
 
-		
+		self.cropped = cropped
+
 		self.shrink = {'font':random.uniform(.6,.2),'NIST':random.uniform(.9,.35)}
 		self.shear = {'font':random.uniform(.7,1/.7),'NIST':random.uniform(.7,1/.7)}
 		self.rot = {'font':random.uniform(-.6,.6),'NIST':random.uniform(-.1,.1)}
@@ -299,6 +362,7 @@ class augmentation_letters_data(Dataset):
 
 	def augment(self,img,img_path):
 		augmentations = [0,0,0]
+
 		img = img.resize((224,224), Image.ANTIALIAS)
 
 		if 'NIST' in img_path:
@@ -308,6 +372,13 @@ class augmentation_letters_data(Dataset):
 
 		if np.random.binomial(1,self.transform_prob_dict['size']) == 1:
 			augmentations[0] = 1
+
+			if not self.cropped:
+				img_data = totensor(img)
+				cropped_img_data = letter_tight_crop(img_data)
+				img = topil(cropped_img_data)
+				img = img.resize((224,224), Image.ANTIALIAS)
+
 			s = (int(img.size[0]*shrink),int(img.size[1]*shrink*shear))
 
 			small_img = img.resize(s, Image.ANTIALIAS)
@@ -327,8 +398,10 @@ class augmentation_letters_data(Dataset):
 			#affined_img = back_img.convert('RGB')
 			affined_img = back_img
 		else:
-			affined_img = add_img_ratio_margin(img)
-			affined_img = affined_img.resize((224,224), Image.ANTIALIAS)
+			if self.cropped:
+				img = add_img_ratio_margin(img)
+			affined_img = img.resize((224,224), Image.ANTIALIAS)
+			affined_img = affined_img.convert('L')
 
 		#tensor stuff
 
@@ -382,22 +455,27 @@ class augmentation_letters_data(Dataset):
 			img_data = torch.cat((img_data,img_data,img_data))
 
 		if np.random.binomial(1,self.transform_prob_dict['noise']) == 1:
+			noise_amount = np.random.uniform(0.01,.1)
+			augmentation_transform = transforms.Compose([
+														AddGaussianNoise(0,noise_amount)
+														])
+
 			augmentations[2] = 1
 			img_data = augmentation_transform(img_data)
-		
-		if self.imagenet_normalize:
-			img_data = imnet_normalize(img_data)
+
 
 		return img_data,augmentations
 			
 
 	def __getitem__(self, idx):
-
+		#import pdb;pdb.set_trace()
 		img_path = os.path.join(self.root_dir,self.img_names[idx])
 		img = Image.open(img_path)
 
 		if self.use_augment:
 			img, augmentations = self.augment(img,img_path)
+			if self.imagenet_normalize:
+				img = imnet_normalize(img)
 
 
 		else:
@@ -417,15 +495,190 @@ class augmentation_letters_data(Dataset):
 
 
 
+class scene_letters_data(Dataset):
+	
+	def __init__(self, root_dir ='../data/combined_data/train_uncropped/',scene_dir='../data/letterBG_SUN/',use_augment=True, imagenet_normalize=True,return_augmentations = False, cropped=False, transform_prob_dict=None):
+				
+		self.root_dir = root_dir
+		
+		self.img_names = os.listdir(self.root_dir)
+		self.img_names.sort()
+
+		self.label_names = []
+		for img_name in self.img_names:
+			label_name = img_name.split('_')[0]
+			if label_name not in self.label_names:
+				self.label_names.append(label_name)
+
+		self.num_classes = len(self.label_names)
+
+		self.cropped = cropped
+
+		self.shrink = {'font':random.uniform(.6,.2),'NIST':random.uniform(.9,.35)}
+		self.shear = {'font':random.uniform(.7,1/.7),'NIST':random.uniform(.7,1/.7)}
+		self.rot = {'font':random.uniform(-.6,.6),'NIST':random.uniform(-.1,.1)}
+
+		self.use_augment = use_augment
+		self.imagenet_normalize = imagenet_normalize
+
+		self.return_augmentations = return_augmentations
+
+		if transform_prob_dict is None:
+			self.transform_prob_dict = {'color':.8,
+										'size':.8,
+										'noise':.6
+										}
+		else:
+			self.transform_prob_dict = transform_prob_dict
+
+		self.scene_dir = scene_dir
+		self.scene_img_names = os.listdir(scene_dir)
+		print(len(self.scene_img_names))
+
+
+	def __len__(self):
+		return len(self.img_names)
+
+	def get_label_from_name(self,img_name):
+		label_name = img_name.split('_')[0]
+		return torch.tensor(self.label_names.index(label_name))       
+
+	def augment(self,img,img_path):
+		augmentations = [0,0,0]
+
+		img = img.resize((224,224), Image.ANTIALIAS)
+
+		if 'NIST' in img_path:
+			shrink,shear,rot = self.shrink['NIST'],self.shear['NIST'],self.rot['NIST']
+		else:
+			shrink,shear,rot = self.shrink['font'],self.shear['font'],self.rot['font']
+
+		if np.random.binomial(1,self.transform_prob_dict['size']) == 1:
+			augmentations[0] = 1
+
+			if not self.cropped:
+				img_data = totensor(img)
+				cropped_img_data = letter_tight_crop(img_data)
+				img = topil(cropped_img_data)
+				img = img.resize((224,224), Image.ANTIALIAS)
+
+			s = (int(img.size[0]*shrink),int(img.size[1]*shrink*shear))
+
+			small_img = img.resize(s, Image.ANTIALIAS)
+
+			#rotate (might want 'expand' to be '1' if we notice letters getting cut off )
+			small_img = small_img.rotate(30*rot, Image.BILINEAR, expand = 1, fillcolor='white')
+
+			#center
+			#x_anch = int(img.size[0]/2 - small_img.size[0]/2)
+			#y_anch = int(img.size[1]/2 - small_img.size[1]/2)
+
+			x_anch = random.randint(0,max(img.size[0]-small_img.size[0],0))
+			y_anch = random.randint(0,max(img.size[1]-small_img.size[1],0))
+
+			back_img = Image.new("L", img.size, 'white')
+			back_img.paste(small_img, (x_anch, y_anch))
+			#affined_img = back_img.convert('RGB')
+			affined_img = back_img
+		else:
+			if self.cropped:
+				img = add_img_ratio_margin(img)
+			affined_img = img.resize((224,224), Image.ANTIALIAS)
+			affined_img = affined_img.convert('L')
+
+		#tensor stuff
+		#color   
+		img_data_r = totensor(affined_img)
+		img_data_r[img_data_r>.5] = 1
+		img_data_r[img_data_r<1] = 0
+		if np.random.binomial(1,self.transform_prob_dict['color']) == 1:
+
+
+			img_data_g = deepcopy(img_data_r)
+			img_data_b = deepcopy(img_data_r)
+
+
+			black_color = []
+			for c in range(3):
+				black_color.append(random.uniform(0,1))
+
+			img_data_r[img_data_r==0] = black_color[0]
+			img_data_g[img_data_g==0] = black_color[1]
+			img_data_b[img_data_b==0] = black_color[2]
+
+			img_data = torch.cat((img_data_r,img_data_g,img_data_b))
+		else:
+			img_data = torch.cat((img_data_r,img_data_r,img_data_r))
+
+		cond = img_data == 1
+
+		if np.random.binomial(1,self.transform_prob_dict['noise']) == 1:
+			noise_amount = np.random.uniform(0.01,.1)
+			augmentation_transform = transforms.Compose([
+														AddGaussianNoise(0,noise_amount)
+														])
+
+			augmentations[2] = 1
+			img_data = augmentation_transform(img_data)
+
+
+		return img_data,cond,augmentations
+			
+
+	def __getitem__(self, idx):
+		#import pdb;pdb.set_trace()
+		img_path = os.path.join(self.root_dir,self.img_names[idx])
+		img = Image.open(img_path)
+
+		if self.use_augment:
+			img, cond, augmentations = self.augment(img,img_path)
+		else:
+			img = img.convert('RGB')
+			img = default_transform(img)
+
+		#scene background
+		
+		scene_i = random.randint(0,len(self.scene_img_names)-1)
+		scene_path = os.path.join(self.scene_dir,self.scene_img_names[scene_i])
+		scene_img = Image.open(scene_path)
+		scene_img = scene_img.resize((224,224), Image.ANTIALIAS)
+		scene_data = totensor(scene_img)
+		img = np.where(cond, scene_data, img)
+
+		img = torch.from_numpy(img)
+		
+		if self.imagenet_normalize:
+			img = imnet_normalize(img)
+		else:
+			img = default_transform(img)
+
+		label = self.get_label_from_name(self.img_names[idx])
+		
+		if self.return_augmentations:
+			return (img,label,augmentations)
+		else:
+			return (img,label)
+
+
+
+
+
+
 class mix_imagenet_aug_letter_data(Dataset):
 	
 
-	def __init__(self, root_dir ='../data/mixed_imnet_letter/', train=True,use_augment=True, imagenet_normalize=True,return_augmentations = False, transform_prob_dict=None):
-		self.train = train	
+	def __init__(self, root_dir ='../data/mixed_imnet_letter/',train=True,use_augment=True, imagenet_normalize=True,cropped=True,return_augmentations = False,im_size=224, transform_prob_dict=None):
+
 		if train:
-			self.root_dir = root_dir+'train/'
+			self.root_dir = root_dir+'train'
 		else:
-			self.root_dir = root_dir+'test/'
+			self.root_dir = root_dir+'test'
+
+		self.train=train
+		self.cropped=cropped
+
+		self.im_size = im_size
+
 
 
 		self.shrink = {'font':random.uniform(.6,.2),'NIST':random.uniform(.9,.35)}
@@ -470,7 +723,7 @@ class mix_imagenet_aug_letter_data(Dataset):
 
 	def augment(self,img,img_path):
 		augmentations = [0,0,0]
-		img = img.resize((224,224), Image.ANTIALIAS)
+		img = img.resize((self.im_size,self.im_size), Image.ANTIALIAS)
 
 		if 'NIST' in img_path:
 			shrink,shear,rot = self.shrink['NIST'],self.shear['NIST'],self.rot['NIST']
@@ -479,6 +732,14 @@ class mix_imagenet_aug_letter_data(Dataset):
 
 		if np.random.binomial(1,self.transform_prob_dict['size']) == 1:
 			augmentations[0] = 1
+
+			if not self.cropped:
+				img_data = totensor(img)
+				cropped_img_data = letter_tight_crop(img_data)
+				img = topil(cropped_img_data)
+				img = img.resize((self.im_size,self.im_size), Image.ANTIALIAS)
+
+
 			s = (int(img.size[0]*shrink),int(img.size[1]*shrink*shear))
 
 			small_img = img.resize(s, Image.ANTIALIAS)
@@ -497,9 +758,12 @@ class mix_imagenet_aug_letter_data(Dataset):
 			back_img.paste(small_img, (x_anch, y_anch))
 			#affined_img = back_img.convert('RGB')
 			affined_img = back_img
+			
 		else:
-			affined_img = add_img_ratio_margin(img)
-			affined_img = affined_img.resize((224,224), Image.ANTIALIAS)
+			if self.cropped:
+				img = add_img_ratio_margin(img)
+			affined_img = img.resize((224,224), Image.ANTIALIAS)
+			affined_img = affined_img.convert('L')
 
 		#tensor stuff
 
@@ -554,10 +818,16 @@ class mix_imagenet_aug_letter_data(Dataset):
 
 		if np.random.binomial(1,self.transform_prob_dict['noise']) == 1:
 			augmentations[2] = 1
-			img_data = augmentation_transform(img_data)
+			noise_amount = np.random.uniform(0.01,.1)
+			noise_transform = transforms.Compose([
+														AddGaussianNoise(0,noise_amount)
+														])
+
+			img_data = noise_transform(img_data)
 		
-		if self.imagenet_normalize:
-			img_data = imnet_normalize(img_data)
+		#if self.imagenet_normalize:
+		#	print(img_data.shape)
+		#	img_data = imnet_normalize(img_data)
 
 		return img_data,augmentations
 
@@ -571,32 +841,24 @@ class mix_imagenet_aug_letter_data(Dataset):
 		img = Image.open(img_path)
 		
 		if label.item() > 999:
-			if self.train:
-				if self.use_augment:
-					img, augmentations = self.augment(img,img_path)
-					if self.imagenet_normalize:
-						img = self.imnet_norm(img)
-				else:
-					augmentations = [0,0,0]
-					img = img.convert('RGB')
-					#img = add_img_ratio_margin(img)
-					img = default_transform(img)
-					if self.imagenet_normalize:
-						img = self.imnet_norm(img)
 
-
-			else:
-				#img = self.augment(img,img_path)
-				#img = self.imnet_norm(img)
+			if self.use_augment:
+				img, augmentations = self.augment(img,img_path)
 				
-				img = img.convert('RGB')
-				img = add_img_ratio_margin(img)
-				img = default_transform(img)
-				#img = augmentation_transform(img)
+				
 				if self.imagenet_normalize:
 					img = self.imnet_norm(img)
-				#img = mixed_letter_transform(img)
+			else:
 				augmentations = [0,0,0]
+				if self.cropped:
+					img = add_img_ratio_margin(img)
+				img = img.convert('RGB')
+				#img = add_img_ratio_margin(img)
+				img = default_transform(img)
+			
+				if self.imagenet_normalize:
+					img = self.imnet_norm(img)
+
 
 		else:
 			if self.train:
